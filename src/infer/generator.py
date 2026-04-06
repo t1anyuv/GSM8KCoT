@@ -31,6 +31,18 @@ def _resolve_dtype() -> torch.dtype:
     return torch.float16 if torch.cuda.is_available() else torch.float32
 
 
+def _build_generate_kwargs(config: GenerationConfig, pad_token_id: int) -> dict[str, int | float | bool]:
+    generate_kwargs: dict[str, int | float | bool] = {
+        "max_new_tokens": config.max_new_tokens,
+        "do_sample": config.do_sample,
+        "pad_token_id": pad_token_id,
+    }
+    if config.do_sample:
+        generate_kwargs["temperature"] = config.temperature
+        generate_kwargs["top_p"] = config.top_p
+    return generate_kwargs
+
+
 def load_model_and_tokenizer(
     model_path: str,
     base_model_name_or_path: str | None = None,
@@ -40,6 +52,7 @@ def load_model_and_tokenizer(
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "left"
 
     quantization_config = None
     if load_in_4bit:
@@ -95,13 +108,10 @@ def generate_one(question: str, config: GenerationConfig) -> dict[str, str]:
     )
     prompt = build_inference_prompt(question, config.format_type, config.system_prompt)
     encoded = tokenizer(prompt, return_tensors="pt").to(model.device)
+    generate_kwargs = _build_generate_kwargs(config, tokenizer.pad_token_id)
     outputs = model.generate(
         **encoded,
-        max_new_tokens=config.max_new_tokens,
-        temperature=config.temperature,
-        top_p=config.top_p,
-        do_sample=config.do_sample,
-        pad_token_id=tokenizer.pad_token_id,
+        **generate_kwargs,
     )
     full_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
     generated_text = full_text[len(prompt):].strip() if full_text.startswith(prompt) else full_text.strip()
@@ -129,13 +139,10 @@ def batch_generate(dataset: Dataset, config: GenerationConfig) -> list[dict[str,
             for question in batch["question"]
         ]
         encoded = tokenizer(prompts, return_tensors="pt", padding=True, truncation=True).to(model.device)
+        generate_kwargs = _build_generate_kwargs(config, tokenizer.pad_token_id)
         outputs = model.generate(
             **encoded,
-            max_new_tokens=config.max_new_tokens,
-            temperature=config.temperature,
-            top_p=config.top_p,
-            do_sample=config.do_sample,
-            pad_token_id=tokenizer.pad_token_id,
+            **generate_kwargs,
         )
 
         decoded = tokenizer.batch_decode(outputs, skip_special_tokens=True)
