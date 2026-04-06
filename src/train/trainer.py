@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 import json
 import random
 from pathlib import Path
@@ -74,11 +73,6 @@ def _save_resolved_config(config: dict[str, Any], output_dir: Path) -> Path:
     return config_path
 
 
-def _filter_supported_kwargs(callable_obj: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
-    signature = inspect.signature(callable_obj)
-    return {key: value for key, value in kwargs.items() if key in signature.parameters}
-
-
 def run_training(config: dict[str, Any]) -> dict[str, str]:
     seed = int(config.get("seed", 42))
     _set_all_seeds(seed)
@@ -130,45 +124,40 @@ def run_training(config: dict[str, Any]) -> dict[str, str]:
     if training_config.get("gradient_checkpointing", False):
         model.gradient_checkpointing_enable()
 
-    sft_config_kwargs = {
-        "output_dir": str(output_dir),
-        "run_name": training_config.get("run_name"),
-        "learning_rate": training_config["learning_rate"],
-        "num_train_epochs": training_config["num_train_epochs"],
-        "per_device_train_batch_size": training_config["per_device_train_batch_size"],
-        "per_device_eval_batch_size": training_config["per_device_eval_batch_size"],
-        "gradient_accumulation_steps": training_config["gradient_accumulation_steps"],
-        "warmup_ratio": training_config["warmup_ratio"],
-        "weight_decay": training_config["weight_decay"],
-        "logging_steps": training_config["logging_steps"],
-        "eval_strategy": training_config["eval_strategy"],
-        "eval_steps": training_config["eval_steps"],
-        "save_strategy": training_config["save_strategy"],
-        "save_steps": training_config["save_steps"],
-        "save_total_limit": training_config["save_total_limit"],
-        "bf16": training_config["bf16"],
-        "fp16": training_config["fp16"],
-        "gradient_checkpointing": training_config["gradient_checkpointing"],
-        "report_to": training_config.get("report_to", "none"),
-        "max_grad_norm": training_config.get("max_grad_norm", 1.0),
-        "dataset_text_field": "text",
-        "max_seq_length": data_config["max_seq_length"],
-        "seed": seed,
-    }
-    sft_config = SFTConfig(**_filter_supported_kwargs(SFTConfig, sft_config_kwargs))
+    sft_config = SFTConfig(
+        output_dir=str(output_dir),
+        run_name=training_config.get("run_name"),
+        learning_rate=training_config["learning_rate"],
+        num_train_epochs=training_config["num_train_epochs"],
+        per_device_train_batch_size=training_config["per_device_train_batch_size"],
+        per_device_eval_batch_size=training_config["per_device_eval_batch_size"],
+        gradient_accumulation_steps=training_config["gradient_accumulation_steps"],
+        warmup_ratio=training_config["warmup_ratio"],
+        weight_decay=training_config["weight_decay"],
+        logging_steps=training_config["logging_steps"],
+        eval_strategy=training_config["eval_strategy"],
+        eval_steps=training_config["eval_steps"],
+        save_strategy=training_config["save_strategy"],
+        save_steps=training_config["save_steps"],
+        save_total_limit=training_config["save_total_limit"],
+        bf16=training_config["bf16"],
+        fp16=training_config["fp16"],
+        gradient_checkpointing=training_config["gradient_checkpointing"],
+        report_to=training_config.get("report_to", "none"),
+        max_grad_norm=training_config.get("max_grad_norm", 1.0),
+        seed=seed,
+        dataset_text_field="text",
+        max_length=data_config["max_seq_length"],
+    )
 
-    trainer_kwargs = {
-        "model": model,
-        "args": sft_config,
-        "train_dataset": train_dataset,
-        "eval_dataset": eval_dataset,
-        "processing_class": tokenizer,
-        "tokenizer": tokenizer,
-        "peft_config": _build_lora_config(peft_config),
-        "dataset_text_field": "text",
-        "max_seq_length": data_config["max_seq_length"],
-    }
-    trainer = SFTTrainer(**_filter_supported_kwargs(SFTTrainer, trainer_kwargs))
+    trainer = SFTTrainer(
+        model=model,
+        args=sft_config,
+        train_dataset=train_dataset,
+        eval_dataset=eval_dataset,
+        processing_class=tokenizer,
+        peft_config=_build_lora_config(peft_config),
+    )
 
     trainer.train()
 

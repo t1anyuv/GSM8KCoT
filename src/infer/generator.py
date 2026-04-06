@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -31,16 +32,14 @@ def _resolve_dtype() -> torch.dtype:
     return torch.float16 if torch.cuda.is_available() else torch.float32
 
 
-def _build_generate_kwargs(config: GenerationConfig, pad_token_id: int) -> dict[str, int | float | bool]:
-    generate_kwargs: dict[str, int | float | bool] = {
-        "max_new_tokens": config.max_new_tokens,
-        "do_sample": config.do_sample,
-        "pad_token_id": pad_token_id,
-    }
+def _build_generation_config(model: AutoPeftModelForCausalLM | AutoModelForCausalLM, config: GenerationConfig):
+    generation_config = copy.deepcopy(model.generation_config)
+    generation_config.max_length = None
+    generation_config.do_sample = config.do_sample
     if config.do_sample:
-        generate_kwargs["temperature"] = config.temperature
-        generate_kwargs["top_p"] = config.top_p
-    return generate_kwargs
+        generation_config.temperature = config.temperature
+        generation_config.top_p = config.top_p
+    return generation_config
 
 
 def load_model_and_tokenizer(
@@ -108,11 +107,14 @@ def generate_one(question: str, config: GenerationConfig) -> dict[str, str]:
     )
     prompt = build_inference_prompt(question, config.format_type, config.system_prompt)
     encoded = tokenizer(prompt, return_tensors="pt").to(model.device)
-    generate_kwargs = _build_generate_kwargs(config, tokenizer.pad_token_id)
+    generation_config = _build_generation_config(model, config)
     outputs = model.generate(
         **encoded,
-        **generate_kwargs,
+        generation_config=generation_config,
+        max_new_tokens=config.max_new_tokens,
+        pad_token_id=tokenizer.pad_token_id,
     )
+
     full_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
     generated_text = full_text[len(prompt):].strip() if full_text.startswith(prompt) else full_text.strip()
     reasoning, final_answer = split_reasoning_and_answer(generated_text)
@@ -139,10 +141,12 @@ def batch_generate(dataset: Dataset, config: GenerationConfig) -> list[dict[str,
             for question in batch["question"]
         ]
         encoded = tokenizer(prompts, return_tensors="pt", padding=True, truncation=True).to(model.device)
-        generate_kwargs = _build_generate_kwargs(config, tokenizer.pad_token_id)
+        generation_config = _build_generation_config(model, config)
         outputs = model.generate(
             **encoded,
-            **generate_kwargs,
+            generation_config=generation_config,
+            max_new_tokens=config.max_new_tokens,
+            pad_token_id=tokenizer.pad_token_id,
         )
 
         decoded = tokenizer.batch_decode(outputs, skip_special_tokens=True)
