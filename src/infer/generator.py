@@ -73,14 +73,14 @@ def load_model_and_tokenizer(
         model = AutoPeftModelForCausalLM.from_pretrained(
             model_path,
             device_map="auto",
-            torch_dtype=_resolve_dtype(),
+            dtype=_resolve_dtype(),
             quantization_config=quantization_config,
         )
     else:
         model = AutoModelForCausalLM.from_pretrained(
             model_path,
             device_map="auto",
-            torch_dtype=_resolve_dtype(),
+            dtype=_resolve_dtype(),
             quantization_config=quantization_config,
         )
 
