@@ -32,10 +32,15 @@ def _resolve_dtype() -> torch.dtype:
     return torch.float16 if torch.cuda.is_available() else torch.float32
 
 
-def _build_generation_config(model: AutoPeftModelForCausalLM | AutoModelForCausalLM, config: GenerationConfig):
+def _build_generation_config(
+    model: AutoPeftModelForCausalLM | AutoModelForCausalLM,
+    config: GenerationConfig,
+    pad_token_id: int,
+):
     generation_config = copy.deepcopy(model.generation_config)
     generation_config.max_length = None
     generation_config.max_new_tokens = config.max_new_tokens
+    generation_config.pad_token_id = pad_token_id
     generation_config.do_sample = config.do_sample
     if config.do_sample:
         generation_config.temperature = config.temperature
@@ -109,11 +114,10 @@ def generate_one(question: str, config: GenerationConfig) -> dict[str, str]:
     )
     prompt = build_inference_prompt(question, config.format_type, config.system_prompt)
     encoded = tokenizer(prompt, return_tensors="pt").to(model.device)
-    generation_config = _build_generation_config(model, config)
+    generation_config = _build_generation_config(model, config, tokenizer.pad_token_id)
     outputs = model.generate(
         **encoded,
         generation_config=generation_config,
-        pad_token_id=tokenizer.pad_token_id,
     )
 
     full_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
@@ -142,11 +146,10 @@ def batch_generate(dataset: Dataset, config: GenerationConfig) -> list[dict[str,
             for question in batch["question"]
         ]
         encoded = tokenizer(prompts, return_tensors="pt", padding=True, truncation=True).to(model.device)
-        generation_config = _build_generation_config(model, config)
+        generation_config = _build_generation_config(model, config, tokenizer.pad_token_id)
         outputs = model.generate(
             **encoded,
             generation_config=generation_config,
-            pad_token_id=tokenizer.pad_token_id,
         )
 
         decoded = tokenizer.batch_decode(outputs, skip_special_tokens=True)
