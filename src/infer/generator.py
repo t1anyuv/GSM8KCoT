@@ -35,6 +35,7 @@ def _resolve_dtype() -> torch.dtype:
 def _build_generation_config(model: AutoPeftModelForCausalLM | AutoModelForCausalLM, config: GenerationConfig):
     generation_config = copy.deepcopy(model.generation_config)
     generation_config.max_length = None
+    generation_config.max_new_tokens = config.max_new_tokens
     generation_config.do_sample = config.do_sample
     if config.do_sample:
         generation_config.temperature = config.temperature
@@ -78,6 +79,7 @@ def load_model_and_tokenizer(
             quantization_config=quantization_config,
         )
 
+    model.generation_config.max_length = None
     model.eval()
     return model, tokenizer
 
@@ -111,7 +113,6 @@ def generate_one(question: str, config: GenerationConfig) -> dict[str, str]:
     outputs = model.generate(
         **encoded,
         generation_config=generation_config,
-        max_new_tokens=config.max_new_tokens,
         pad_token_id=tokenizer.pad_token_id,
     )
 
@@ -145,7 +146,6 @@ def batch_generate(dataset: Dataset, config: GenerationConfig) -> list[dict[str,
         outputs = model.generate(
             **encoded,
             generation_config=generation_config,
-            max_new_tokens=config.max_new_tokens,
             pad_token_id=tokenizer.pad_token_id,
         )
 
