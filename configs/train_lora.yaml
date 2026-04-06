@@ -1,0 +1,67 @@
+seed: 42
+
+model:
+  name_or_path: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+  torch_dtype: auto
+  trust_remote_code: false
+
+data:
+  dataset_name: gsm8k
+  dataset_config: main
+  train_split: train
+  eval_split: test
+  format_type: plain_cot
+  train_sample_size: 500
+  eval_sample_size: 200
+  cache_dir: outputs/data
+  save_format: jsonl
+  max_seq_length: 512
+  system_prompt: You are a careful math tutor. Solve the problem step by step and then give the final numeric answer.
+
+peft:
+  enabled: true
+  r: 16
+  lora_alpha: 32
+  lora_dropout: 0.05
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - up_proj
+    - down_proj
+    - gate_proj
+  bias: none
+  task_type: CAUSAL_LM
+  use_qlora: false
+  bnb_4bit_quant_type: nf4
+  bnb_4bit_use_double_quant: true
+  bnb_4bit_compute_dtype: float16
+
+training:
+  output_dir: outputs/runs/gsm8k-lora
+  run_name: gsm8k-cot-sft
+  learning_rate: 2.0e-4
+  num_train_epochs: 2
+  per_device_train_batch_size: 4
+  per_device_eval_batch_size: 4
+  gradient_accumulation_steps: 4
+  warmup_ratio: 0.03
+  weight_decay: 0.01
+  logging_steps: 10
+  eval_strategy: steps
+  eval_steps: 50
+  save_strategy: steps
+  save_steps: 50
+  save_total_limit: 2
+  bf16: false
+  fp16: true
+  gradient_checkpointing: true
+  report_to: none
+  max_grad_norm: 1.0
+
+generation:
+  max_new_tokens: 256
+  temperature: 0.0
+  top_p: 1.0
+  do_sample: false
